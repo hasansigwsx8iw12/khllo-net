@@ -51,14 +51,19 @@
         <button id="doLoginBtn">دخول</button>
         <div id="loginError" style="color:red; font-size:0.8rem; margin-top:0.5rem;"></div>
         <div style="margin-top:1rem; font-size:0.7rem; background:#f0f8ff; padding:0.5rem; border-radius:1rem;">
-            </div>
+            حسابات مبدئية: yaser / 123456 (مدير)، kamar, mohamad, ghader, reem / 123456 (موظفون)
+        </div>
     </div>
 </div>
 
 <div id="mainApp" class="main-container">
     <div class="header">
         <div class="logo"><h1>🛸 khllo net</h1></div>
-        <div class="user-info"><span id="roleBadge"></span><button id="logoutBtn" class="logout-btn">خروج</button></div>
+        <div class="user-info">
+            <span id="roleBadge"></span>
+            <button id="manageUsersBtn" class="btn-outline" style="display:none;">👥 إدارة المستخدمين</button>
+            <button id="logoutBtn" class="logout-btn">خروج</button>
+        </div>
     </div>
     <div class="stats-grid">
         <div class="stat-card"><h4>📡 مجموع الصحون</h4><div class="stat-number" id="totalDishes">0</div></div>
@@ -131,8 +136,7 @@
         "mohamad": { role: "staff", pass: "123456" },
         "ghader":  { role: "staff", pass: "123456" },
         "reem":    { role: "staff", pass: "123456" },
-        "hasan":    { role: "admin", pass: "123456" }
-   
+        "hasan":   { role: "admin", pass: "123456" }
     };
 
     function login(username, password) {
@@ -151,8 +155,11 @@
         
         if (currentUser.role === "admin") {
             document.getElementById("exportPanel").style.display = "block";
+            document.getElementById("manageUsersBtn").style.display = "inline-block";
+            document.getElementById("manageUsersBtn").onclick = () => { window.location.href = "users.html"; };
         } else {
             document.getElementById("exportPanel").style.display = "none";
+            document.getElementById("manageUsersBtn").style.display = "none";
         }
         
         if (database) {
@@ -219,7 +226,7 @@
 
         const tbody = document.getElementById("inventoryBody");
         if (!inventory.length) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:2rem;">📭 لا توجد أجهزة في الجرد. أضف جهازاً جديداً.</td></tr>`;
+            tbody.innerHTML = `<table><td colspan="8" style="text-align:center; padding:2rem;">📭 لا توجد أجهزة في الجرد. أضف جهازاً جديداً.</td></tr>`;
             return;
         }
         let html = "";
@@ -242,7 +249,7 @@
                         <td>${dev.addedBy ? escapeHtml(dev.addedBy) : "—"}</td>
                         <td>${dev.borrowedByStaff ? escapeHtml(dev.borrowedByStaff) : "—"}</td>
                         <td class="actions-cell">${actionButtons}</td>
-                     </tr>`;
+                    </tr>`;
         });
         tbody.innerHTML = html;
         
@@ -376,12 +383,12 @@
         logs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
         const sheetData = logs.map(log => ({
             "التاريخ والوقت": new Date(log.timestamp).toLocaleString('ar-EG'),
-            "نوع العملية": log.operation === "ADD" ? "إضافة جهاز" : (log.operation === "BORROW" ? "سحب (استعارة)" : (log.operation === "RETURN" ? "إعادة" : "حذف")),
+            "نوع العملية": log.operation === "ADD" ? "إضافة" : (log.operation === "BORROW" ? "سحب" : (log.operation === "RETURN" ? "إعادة" : "حذف")),
             "معرف الجهاز": log.deviceId,
             "نوع الجهاز": log.deviceType === "dish" ? "صحن" : "راوتر",
             "الموديل": log.deviceSubType,
-            "ملاحظات الجهاز": log.deviceNotes || "",
-            "العميل المستلم": log.relatedPerson || "",
+            "الملاحظات": log.deviceNotes,
+            "العميل المستلم": log.relatedPerson,
             "الموظف المنفذ": log.staffName
         }));
         const ws = XLSX.utils.json_to_sheet(sheetData);
@@ -397,7 +404,7 @@
         if (login(u, p)) {
             showApp();
         } else {
-            document.getElementById("loginError").innerText = "اسم المستخدم أو كلمة المرور غير صحيحة. تأكد من كتابة الاسم بشكل صحيح ";
+            document.getElementById("loginError").innerText = "اسم المستخدم أو كلمة المرور غير صحيحة. تأكد من كتابة الاسم بشكل صحيح.";
         }
     };
     document.getElementById("logoutBtn").onclick = () => { location.reload(); };
