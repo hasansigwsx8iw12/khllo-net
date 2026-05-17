@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>khllo net | إدارة المستخدمين</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', 'Tajawal', sans-serif; }
+        body { background: linear-gradient(135deg, #c2e3f0, #d9eff8); padding: 2rem; }
+        .container { max-width: 900px; margin: auto; background: white; border-radius: 2rem; padding: 2rem; box-shadow: 0 20px 30px rgba(0,0,0,0.1); }
+        h1 { color: #1a6f8f; margin-bottom: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; font-weight: bold; color: #2a7f9e; }
+        input, select { width: 100%; padding: 0.7rem; border-radius: 1rem; border: 1px solid #cce5f0; margin-top: 0.3rem; }
+        button { background: #2f8db3; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 2rem; cursor: pointer; margin-left: 0.5rem; margin-top: 0.5rem; }
+        .btn-danger { background: #bc5a4a; }
+        .btn-success { background: #1e6f4c; }
+        table { width: 100%; margin-top: 2rem; border-collapse: collapse; }
+        th, td { padding: 0.7rem; border-bottom: 1px solid #ddd; text-align: center; }
+        th { background: #e2f3fa; }
+        .actions button { margin: 0 0.2rem; padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+        .message { padding: 0.5rem; margin-top: 1rem; border-radius: 1rem; display: none; }
+        .success { background: #d4efdf; color: #1e6f4c; display: block; }
+        .error { background: #ffe1db; color: #bc5a4a; display: block; }
+        .back-link { margin-top: 2rem; text-align: center; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>👥 إدارة حسابات المستخدمين</h1>
+    <div id="message" class="message"></div>
+
+    <div class="form-group">
+        <label>اسم المستخدم (للحساب)</label>
+        <input type="text" id="username" placeholder="مثال: yaser">
+    </div>
+    <div class="form-group">
+        <label>كلمة المرور</label>
+        <input type="text" id="password" placeholder="كلمة المرور">
+    </div>
+    <div class="form-group">
+        <label>الصلاحية</label>
+        <select id="role">
+            <option value="staff">موظف (staff)</option>
+            <option value="admin">مدير (admin)</option>
+        </select>
+    </div>
+    <div>
+        <button id="addBtn">➕ إضافة مستخدم</button>
+        <button id="updateBtn" style="display:none;">✏️ تحديث المستخدم</button>
+        <button id="cancelBtn" style="display:none;">❌ إلغاء</button>
+    </div>
+
+    <h2 style="margin-top: 2rem;">📋 قائمة الحسابات</h2>
+    <table id="usersTable">
+        <thead>
+            <tr><th>اسم المستخدم</th><th>الصلاحية</th><th>تاريخ الإضافة</th><th>الإجراءات</th></tr>
+        </thead>
+        <tbody id="usersBody"></tbody>
+    </table>
+    <div class="back-link">
+        <button id="goMainBtn" class="btn-success">🏠 العودة للنظام الرئيسي</button>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyC9TUQJqKNvMijfODajYz1g2VsnhqCyrUY",
+        authDomain: "khllonet.firebaseapp.com",
+        databaseURL: "https://khllonet-default-rtdb.firebaseio.com",
+        projectId: "khllonet",
+        storageBucket: "khllonet.firebasestorage.app",
+        messagingSenderId: "599378366105",
+        appId: "1:599378366105:web:3f639a6ecd0ce8c97ab208"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const usersRef = db.ref("khllo_users");
+
+    let editingUsername = null;
+
+    function showMessage(text, isError = false) {
+        const msgDiv = document.getElementById("message");
+        msgDiv.innerText = text;
+        msgDiv.className = "message " + (isError ? "error" : "success");
+        setTimeout(() => { msgDiv.className = "message"; }, 3000);
+    }
+
+    function loadUsers() {
+        usersRef.once('value').then(snapshot => {
+            const users = snapshot.val() || {};
+            const tbody = document.getElementById("usersBody");
+            tbody.innerHTML = "";
+            for (let [username, data] of Object.entries(users)) {
+                const row = tbody.insertRow();
+                row.insertCell(0).innerText = username;
+                row.insertCell(1).innerText = data.role === "admin" ? "مدير" : "موظف";
+                row.insertCell(2).innerText = data.createdAt ? new Date(data.createdAt).toLocaleString() : "—";
+                const actionsCell = row.insertCell(3);
+                actionsCell.className = "actions";
+                const editBtn = document.createElement("button");
+                editBtn.innerText = "✏️ تعديل";
+                editBtn.style.background = "#ffc107";
+                editBtn.style.color = "#000";
+                editBtn.onclick = () => fillEditForm(username, data.role, data.password);
+                const deleteBtn = document.createElement("button");
+                deleteBtn.innerText = "🗑️ حذف";
+                deleteBtn.style.background = "#bc5a4a";
+                deleteBtn.onclick = () => deleteUser(username);
+                actionsCell.appendChild(editBtn);
+                actionsCell.appendChild(deleteBtn);
+            }
+        }).catch(err => showMessage("خطأ في التحميل: " + err.message, true));
+    }
+
+    function fillEditForm(username, role, password) {
+        document.getElementById("username").value = username;
+        document.getElementById("password").value = password;
+        document.getElementById("role").value = role;
+        editingUsername = username;
+        document.getElementById("addBtn").style.display = "none";
+        document.getElementById("updateBtn").style.display = "inline-block";
+        document.getElementById("cancelBtn").style.display = "inline-block";
+    }
+
+    function cancelEdit() {
+        document.getElementById("username").value = "";
+        document.getElementById("password").value = "";
+        document.getElementById("role").value = "staff";
+        editingUsername = null;
+        document.getElementById("addBtn").style.display = "inline-block";
+        document.getElementById("updateBtn").style.display = "none";
+        document.getElementById("cancelBtn").style.display = "none";
+    }
+
+    function addUser() {
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value.trim();
+        const role = document.getElementById("role").value;
+        if (!username || !password) {
+            showMessage("يرجى إدخال اسم المستخدم وكلمة المرور", true);
+            return;
+        }
+        const userRef = usersRef.child(username);
+        userRef.once('value').then(snapshot => {
+            if (snapshot.exists()) {
+                showMessage("اسم المستخدم موجود بالفعل!", true);
+                return;
+            }
+            userRef.set({
+                username: username,
+                password: password,
+                role: role,
+                createdAt: new Date().toISOString()
+            }).then(() => {
+                showMessage("✅ تم إضافة المستخدم بنجاح");
+                loadUsers();
+                cancelEdit();
+            }).catch(err => showMessage(err.message, true));
+        });
+    }
+
+    function updateUser() {
+        if (!editingUsername) return;
+        const newUsername = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value.trim();
+        const role = document.getElementById("role").value;
+        if (!newUsername || !password) {
+            showMessage("يرجى إدخال البيانات كاملة", true);
+            return;
+        }
+        if (newUsername !== editingUsername) {
+            const oldRef = usersRef.child(editingUsername);
+            oldRef.once('value').then(snap => {
+                if (snap.exists()) {
+                    oldRef.remove().then(() => {
+                        usersRef.child(newUsername).set({
+                            username: newUsername,
+                            password: password,
+                            role: role,
+                            createdAt: new Date().toISOString()
+                        }).then(() => {
+                            showMessage("✅ تم تحديث المستخدم (تم تغيير اسم المستخدم)");
+                            loadUsers();
+                            cancelEdit();
+                        }).catch(err => showMessage(err.message, true));
+                    });
+                }
+            });
+        } else {
+            usersRef.child(editingUsername).update({
+                password: password,
+                role: role
+            }).then(() => {
+                showMessage("✅ تم تحديث المستخدم");
+                loadUsers();
+                cancelEdit();
+            }).catch(err => showMessage(err.message, true));
+        }
+    }
+
+    function deleteUser(username) {
+        if (confirm(`هل أنت متأكد من حذف المستخدم "${username}"؟`)) {
+            usersRef.child(username).remove().then(() => {
+                showMessage("✅ تم حذف المستخدم");
+                loadUsers();
+                if (editingUsername === username) cancelEdit();
+            }).catch(err => showMessage(err.message, true));
+        }
+    }
+
+    document.getElementById("addBtn").onclick = addUser;
+    document.getElementById("updateBtn").onclick = updateUser;
+    document.getElementById("cancelBtn").onclick = cancelEdit;
+    document.getElementById("goMainBtn").onclick = () => { window.location.href = "index.html"; };
+
+    loadUsers();
+</script>
+</body>
+</html>
