@@ -33,7 +33,7 @@
     <div id="message" class="message"></div>
 
     <div class="form-group">
-        <label>اسم المستخدم (للحساب)</label>
+        <label>اسم المستخدم</label>
         <input type="text" id="username" placeholder="مثال: yaser">
     </div>
     <div class="form-group">
@@ -49,15 +49,13 @@
     </div>
     <div>
         <button id="addBtn">➕ إضافة مستخدم</button>
-        <button id="updateBtn" style="display:none;">✏️ تحديث المستخدم</button>
+        <button id="updateBtn" style="display:none;">✏️ تحديث</button>
         <button id="cancelBtn" style="display:none;">❌ إلغاء</button>
     </div>
 
     <h2 style="margin-top: 2rem;">📋 قائمة الحسابات</h2>
     <table id="usersTable">
-        <thead>
-            <tr><th>اسم المستخدم</th><th>الصلاحية</th><th>تاريخ الإضافة</th><th>الإجراءات</th></tr>
-        </thead>
+        <thead><tr><th>اسم المستخدم</th><th>الصلاحية</th><th>تاريخ الإضافة</th><th>الإجراءات</th></tr></thead>
         <tbody id="usersBody"></tbody>
     </table>
     <div class="back-link">
@@ -86,7 +84,7 @@
         const msgDiv = document.getElementById("message");
         msgDiv.innerText = text;
         msgDiv.className = "message " + (isError ? "error" : "success");
-        setTimeout(() => { msgDiv.className = "message"; }, 3000);
+        setTimeout(() => msgDiv.className = "message", 3000);
     }
 
     function loadUsers() {
