@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>khllo net | إدارة الجرد - سحب وإعادة فقط</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', 'Tajawal', system-ui; }
+        body { background: linear-gradient(135deg, #c2e3f0 0%, #d9eff8 100%); min-height: 100vh; padding: 1.5rem; }
+        .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+        .login-card { background: white; max-width: 400px; width: 90%; border-radius: 2rem; padding: 2rem; text-align: center; box-shadow: 0 20px 30px rgba(0,0,0,0.2); }
+        .login-card input { width: 100%; padding: 0.8rem; margin: 0.5rem 0; border-radius: 1.5rem; border: 1px solid #cce5f0; }
+        .login-card button { background: #2f8db3; color: white; width: 100%; padding: 0.8rem; border-radius: 2rem; font-weight: bold; border: none; cursor: pointer; }
+        .main-container { max-width: 1500px; margin: 0 auto; background: white; border-radius: 2rem; overflow: hidden; display: none; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(98deg, #6bc2df, #90d4ec); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .logo h1 { color: white; background: rgba(255,255,255,0.2); padding: 0.2rem 1rem; border-radius: 40px; font-size: 1.8rem; }
+        .user-info { background: white; padding: 0.3rem 1rem; border-radius: 40px; display: flex; gap: 10px; align-items: center; }
+        .stats-grid { display: flex; gap: 1rem; padding: 1.5rem; flex-wrap: wrap; }
+        .stat-card { background: #fbfeff; flex: 1; border-radius: 1.5rem; padding: 1rem; border: 1px solid #cceef9; }
+        .stat-number { font-size: 2rem; font-weight: 800; color: #196f8f; }
+        .add-panel, .quick-borrow, .export-panel { background: #fafeff; margin: 1rem 1.5rem; padding: 1rem; border-radius: 1.5rem; border: 1px solid #cceef2; }
+        .form-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; }
+        .form-group { flex: 1; min-width: 150px; }
+        .form-group label { font-size: 0.7rem; font-weight: bold; color: #2a7f9e; }
+        select, input { width: 100%; padding: 0.6rem; border-radius: 1rem; border: 1.5px solid #d4eef7; }
+        .btn { border: none; padding: 0.6rem 1.2rem; border-radius: 2rem; font-weight: bold; cursor: pointer; margin: 0.2rem; }
+        .btn-primary { background: #2f8db3; color: white; }
+        .btn-outline { background: #eef7fc; border: 1px solid #7fc8e2; }
+        .btn-danger { background: #ffe1db; color: #bc5a4a; }
+        .btn-success { background: #d4efdf; color: #1e6f4c; border: 1px solid #9fd3b4; }
+        .table-wrapper { padding: 0 1.5rem 1.5rem; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #e2f3fa; padding: 0.8rem; color: #1a637f; }
+        td { padding: 0.7rem; border-bottom: 1px solid #e0f0f5; text-align: center; }
+        .status-badge { padding: 0.2rem 0.7rem; border-radius: 30px; font-size: 0.7rem; font-weight: bold; }
+        .available { background: #e1f7ea; color: #157347; }
+        .borrowed { background: #feeadf; color: #bf5e3c; }
+        footer { text-align: center; padding: 1rem; font-size: 0.7rem; background: #fafeff; border-top: 1px solid #d9ecf3; }
+        @media (max-width: 700px) { .form-row { flex-direction: column; } }
+    </style>
+</head>
+<body>
+<div id="loginOverlay" class="login-overlay">
+    <div class="login-card">
+        <h2>🔐 khllo net</h2>
+        <input type="text" id="loginUsername" placeholder="اسم المستخدم" autocomplete="off">
+        <input type="password" id="loginPassword" placeholder="كلمة المرور">
+        <button id="doLoginBtn">دخول</button>
+        <div id="loginError" style="color:red; font-size:0.8rem; margin-top:0.5rem;"></div>
+        <div style="margin-top:1rem; font-size:0.7rem; background:#f0f8ff; padding:0.5rem; border-radius:1rem;">
+            </div>
+    </div>
+</div>
+
+<div id="mainApp" class="main-container">
+    <div class="header">
+        <div class="logo"><h1>🛸 khllo net</h1></div>
+        <div class="user-info"><span id="roleBadge"></span><button id="logoutBtn" class="logout-btn">خروج</button></div>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card"><h4>📡 مجموع الصحون</h4><div class="stat-number" id="totalDishes">0</div></div>
+        <div class="stat-card"><h4>📶 مجموع الراوترات</h4><div class="stat-number" id="totalRouters">0</div></div>
+        <div class="stat-card"><h4>🔄 مستعارة</h4><div class="stat-number" id="borrowedCount">0</div></div>
+        <div class="stat-card"><h4>✅ متاحة</h4><div class="stat-number" id="availableCount">0</div></div>
+    </div>
+    <div class="add-panel">
+        <div class="form-row">
+            <div class="form-group"><label>📌 نوع الجهاز</label><select id="mainDeviceType"><option value="dish">صحن</option><option value="router">راوتر</option></select></div>
+            <div class="form-group"><label>النوع التفصيلي</label><select id="subTypeSelect"></select></div>
+            <div class="form-group"><label>رقم سري/ملاحظة</label><input type="text" id="extraNotes" placeholder="اختياري"></div>
+            <div><button id="addDeviceBtn" class="btn btn-primary">+ إضافة للجرد</button></div>
+        </div>
+    </div>
+    <div class="quick-borrow">
+        <div class="form-row">
+            <div class="form-group"><label>📋 قائمة سحب الأجهزة (المتاحة)</label><select id="quickBorrowSelect"><option>-- اختر جهازاً --</option></select></div>
+            <div class="form-group"><label>👤 اسم العميل المستلم</label><input type="text" id="quickBorrowName" placeholder="اسم العميل أو الجهة"></div>
+            <div><button id="quickBorrowBtn" class="btn btn-outline">📥 سحب الجهاز</button></div>
+        </div>
+    </div>
+    <div class="export-panel" id="exportPanel" style="display:none;">
+        <div class="form-row">
+            <div><button id="exportInventoryBtn" class="btn btn-success">📎 تصدير قائمة الأجهزة (Excel)</button></div>
+            <div><button id="exportLogBtn" class="btn btn-success">📊 تصدير سجل العمليات (Excel)</button></div>
+        </div>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead><tr><th>#</th><th>النوع</th><th>التفاصيل</th><th>الحالة</th><th>العميل المستلم</th><th>أضيف بواسطة</th><th>سُحب بواسطة</th><th>إجراءات</th></tr></thead>
+            <tbody id="inventoryBody"></tbody>
+        </table>
+    </div>
+    <footer>✅ نظام سحابي - السحب والإضافة مسجلة بأسماء الموظفين - التصدير للمدير فقط</footer>
+</div>
+
+<script>
+    // إعدادات Firebase (خاصة بمشروع khllonet)
+    const firebaseConfig = {
+        apiKey: "AIzaSyC9TUQJqKNvMijfODajYz1g2VsnhqCyrUY",
+        authDomain: "khllonet.firebaseapp.com",
+        databaseURL: "https://khllonet-default-rtdb.firebaseio.com",
+        projectId: "khllonet",
+        storageBucket: "khllonet.firebasestorage.app",
+        messagingSenderId: "599378366105",
+        appId: "1:599378366105:web:3f639a6ecd0ce8c97ab208"
+    };
+    
+    let database;
+    try {
+        firebase.initializeApp(firebaseConfig);
+        database = firebase.database();
+        console.log("✅ Firebase connected");
+    } catch(e) { 
+        console.error("Firebase init error", e);
+        alert("⚠️ فشل الاتصال بـ Firebase، تأكد من الإعدادات والإنترنت");
+    }
+
+    const DISH_TYPES = ["ليتبيم M5", "ليتبيم AC"];
+    const ROUTER_TYPES = ["Cudy", "Nets Black", "Nets White", "Nets 2 Entel"];
+    let currentUser = { username: "", role: "" };
+    const INVENTORY_REF = "khllo_inventory";
+    const LOG_REF = "khllo_operation_log";
+
+    // قائمة المستخدمين المسموح لهم (جميع كلمات السر 123456)
+    const validUsers = {
+        "yaser":   { role: "admin", pass: "123456" },
+        "kamar":   { role: "staff", pass: "123456" },
+        "mohamad": { role: "staff", pass: "123456" },
+        "ghader":  { role: "staff", pass: "123456" },
+        "reem":    { role: "staff", pass: "123456" }
+    };
+
+    function login(username, password) {
+        const user = validUsers[username];
+        if (user && user.pass === password) {
+            currentUser = { username: username, role: user.role };
+            return true;
+        }
+        return false;
+    }
+
+    function showApp() {
+        document.getElementById("loginOverlay").style.display = "none";
+        document.getElementById("mainApp").style.display = "block";
+        document.getElementById("roleBadge").innerHTML = currentUser.role === "admin" ? `👑 مدير (${currentUser.username})` : `📦 موظف (${currentUser.username})`;
+        
+        if (currentUser.role === "admin") {
+            document.getElementById("exportPanel").style.display = "block";
+        } else {
+            document.getElementById("exportPanel").style.display = "none";
+        }
+        
+        if (database) {
+            listenToInventory();
+        } else {
+            alert("⚠️ الرجاء التأكد من إعدادات Firebase والاتصال بالإنترنت");
+        }
+        
+        document.getElementById("addDeviceBtn").onclick = addDeviceToFirebase;
+        document.getElementById("quickBorrowBtn").onclick = quickBorrow;
+        document.getElementById("mainDeviceType").addEventListener("change", updateSubTypeSelect);
+        document.getElementById("exportInventoryBtn").onclick = exportInventoryToExcel;
+        document.getElementById("exportLogBtn").onclick = exportOperationLog;
+        updateSubTypeSelect();
+    }
+
+    function updateSubTypeSelect() {
+        const main = document.getElementById("mainDeviceType").value;
+        const subSelect = document.getElementById("subTypeSelect");
+        subSelect.innerHTML = "";
+        const types = main === "dish" ? DISH_TYPES : ROUTER_TYPES;
+        types.forEach(t => { let opt = document.createElement("option"); opt.value = t; opt.textContent = t; subSelect.appendChild(opt); });
+    }
+
+    function logOperation(operationType, deviceId, deviceInfo, relatedPerson, staffName) {
+        if (!database) return;
+        const logEntry = {
+            timestamp: new Date().toISOString(),
+            operation: operationType,
+            deviceId: deviceId,
+            deviceType: deviceInfo.type,
+            deviceSubType: deviceInfo.subType,
+            deviceNotes: deviceInfo.notes || "",
+            relatedPerson: relatedPerson || "",
+            staffName: staffName
+        };
+        firebase.database().ref(LOG_REF).push().set(logEntry);
+    }
+
+    function listenToInventory() {
+        if (!database) return;
+        const inventoryRef = firebase.database().ref(INVENTORY_REF);
+        inventoryRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            let inventory = [];
+            if (data) {
+                inventory = Object.keys(data).map(key => ({ id: parseInt(key), ...data[key] }));
+                inventory.sort((a,b) => a.id - b.id);
+            }
+            renderStatsAndTable(inventory);
+            updateQuickDropdown(inventory);
+        });
+    }
+
+    function renderStatsAndTable(inventory) {
+        const dishes = inventory.filter(d => d.type === "dish").length;
+        const routers = inventory.filter(d => d.type === "router").length;
+        const borrowed = inventory.filter(d => d.status === "borrowed").length;
+        const available = inventory.filter(d => d.status === "available").length;
+        document.getElementById("totalDishes").innerText = dishes;
+        document.getElementById("totalRouters").innerText = routers;
+        document.getElementById("borrowedCount").innerText = borrowed;
+        document.getElementById("availableCount").innerText = available;
+
+        const tbody = document.getElementById("inventoryBody");
+        if (!inventory.length) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:2rem;">📭 لا توجد أجهزة في الجرد. أضف جهازاً جديداً.</td></tr>`;
+            return;
+        }
+        let html = "";
+        inventory.forEach(dev => {
+            const isAvail = dev.status === "available";
+            const details = `${dev.subType} ${dev.notes && dev.notes !== "" ? `(${dev.notes})` : ""}`;
+            let actionButtons = "";
+            if (!isAvail) {
+                actionButtons += `<button class="btn-outline" data-id="${dev.id}" data-action="return" style="background:#ffe1db;">🔄 إعادة</button>`;
+            }
+            if (currentUser.role === "admin") {
+                actionButtons += `<button class="btn-danger" data-id="${dev.id}" data-action="delete" style="margin-right:5px;">🗑️ حذف</button>`;
+            }
+            html += `<tr>
+                        <td>${dev.id}</td>
+                        <td>${dev.type === "dish" ? "📡 صحن" : "📶 راوتر"}</td>
+                        <td>${escapeHtml(details)}</td>
+                        <td><span class="status-badge ${isAvail ? 'available' : 'borrowed'}">${isAvail ? "متاح" : "مستعار"}</span></td>
+                        <td>${dev.borrowerName ? escapeHtml(dev.borrowerName) : "—"}</td>
+                        <td>${dev.addedBy ? escapeHtml(dev.addedBy) : "—"}</td>
+                        <td>${dev.borrowedByStaff ? escapeHtml(dev.borrowedByStaff) : "—"}</td>
+                        <td class="actions-cell">${actionButtons}</td>
+                     </tr>`;
+        });
+        tbody.innerHTML = html;
+        
+        document.querySelectorAll("[data-action='return']").forEach(btn => {
+            btn.onclick = () => { let id = parseInt(btn.dataset.id); handleReturn(id); };
+        });
+        if (currentUser.role === "admin") {
+            document.querySelectorAll("[data-action='delete']").forEach(btn => {
+                btn.onclick = () => { let id = parseInt(btn.dataset.id); deleteDeviceFromFirebase(id); };
+            });
+        }
+    }
+
+    async function handleBorrow(deviceId, clientName) {
+        const ref = firebase.database().ref(`${INVENTORY_REF}/${deviceId}`);
+        const snap = await ref.once('value');
+        const dev = snap.val();
+        if (!dev || dev.status !== "available") { showToast("الجهاز غير متاح", true); return; }
+        await ref.update({
+            status: "borrowed",
+            borrowerName: clientName,
+            borrowedAt: new Date().toLocaleDateString(),
+            borrowedByStaff: currentUser.username
+        });
+        logOperation("BORROW", deviceId, dev, clientName, currentUser.username);
+        showToast(`✅ تم سحب الجهاز بواسطة ${currentUser.username} للعميل ${clientName}`);
+    }
+
+    async function handleReturn(deviceId) {
+        const ref = firebase.database().ref(`${INVENTORY_REF}/${deviceId}`);
+        const snap = await ref.once('value');
+        const dev = snap.val();
+        if (!dev || dev.status !== "borrowed") { showToast("الجهاز ليس مستعاراً", true); return; }
+        await ref.update({
+            status: "available",
+            borrowerName: null,
+            borrowedAt: null,
+            borrowedByStaff: null
+        });
+        logOperation("RETURN", deviceId, dev, dev.borrowerName || "", currentUser.username);
+        showToast(`🔄 تمت إعادة الجهاز بواسطة ${currentUser.username}`);
+    }
+
+    async function deleteDeviceFromFirebase(deviceId) {
+        const ref = firebase.database().ref(`${INVENTORY_REF}/${deviceId}`);
+        const snap = await ref.once('value');
+        const dev = snap.val();
+        if (dev && dev.status === "borrowed") { showToast("لا يمكن حذف جهاز مستعار", true); return; }
+        if (confirm("⚠️ هل أنت متأكد من حذف هذا الجهاز نهائياً؟")) {
+            await ref.remove();
+            logOperation("DELETE", deviceId, dev, "", currentUser.username);
+            showToast("🗑️ تم حذف الجهاز");
+        }
+    }
+
+    async function addDeviceToFirebase() {
+        const mainType = document.getElementById("mainDeviceType").value;
+        const subType = document.getElementById("subTypeSelect").value;
+        let notes = document.getElementById("extraNotes").value.trim();
+        if (notes === "") notes = "";
+        const newId = Date.now();
+        const newDevice = {
+            id: newId,
+            type: mainType,
+            subType: subType,
+            notes: notes,
+            status: "available",
+            borrowerName: null,
+            borrowedAt: null,
+            addedBy: currentUser.username,
+            borrowedByStaff: null
+        };
+        await firebase.database().ref(`${INVENTORY_REF}/${newId}`).set(newDevice);
+        logOperation("ADD", newId, newDevice, "", currentUser.username);
+        showToast(`✅ تمت إضافة الجهاز بواسطة ${currentUser.username}`);
+        document.getElementById("extraNotes").value = "";
+    }
+
+    function quickBorrow() {
+        const select = document.getElementById("quickBorrowSelect");
+        const deviceId = parseInt(select.value);
+        const clientName = document.getElementById("quickBorrowName").value.trim();
+        if (!deviceId || !clientName) { showToast("اختر جهازاً واكتب اسم العميل المستلم", true); return; }
+        handleBorrow(deviceId, clientName);
+        document.getElementById("quickBorrowName").value = "";
+        select.value = "";
+    }
+
+    function updateQuickDropdown(inventory) {
+        const select = document.getElementById("quickBorrowSelect");
+        select.innerHTML = '<option value="">-- اختر جهازاً متاحاً --</option>';
+        inventory.filter(d => d.status === "available").forEach(dev => {
+            let opt = document.createElement("option");
+            opt.value = dev.id;
+            opt.textContent = `${dev.type === "dish" ? "📡" : "📶"} ${dev.subType} (رقم ${dev.id})`;
+            select.appendChild(opt);
+        });
+    }
+
+    async function exportInventoryToExcel() {
+        if (currentUser.role !== "admin") { showToast("غير مصرح لك بالتصدير", true); return; }
+        const snapshot = await firebase.database().ref(INVENTORY_REF).once('value');
+        const data = snapshot.val();
+        let inventory = [];
+        if (data) inventory = Object.keys(data).map(key => ({ id: parseInt(key), ...data[key] }));
+        if (inventory.length === 0) { showToast("لا توجد أجهزة لتصديرها", true); return; }
+        const sheetData = inventory.map(dev => ({
+            "المعرف": dev.id,
+            "النوع": dev.type === "dish" ? "صحن" : "راوتر",
+            "الموديل": dev.subType,
+            "الملاحظات": dev.notes || "",
+            "الحالة": dev.status === "available" ? "متاح" : "مستعار",
+            "اسم العميل المستلم": dev.borrowerName || "",
+            "أضيف بواسطة (موظف)": dev.addedBy || "",
+            "سُحب بواسطة (موظف)": dev.borrowedByStaff || "",
+            "تاريخ الاستعارة": dev.borrowedAt || ""
+        }));
+        const ws = XLSX.utils.json_to_sheet(sheetData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "قائمة_الأجهزة");
+        XLSX.writeFile(wb, `khllo_net_الاجهزة_${new Date().toISOString().slice(0,19)}.xlsx`);
+        showToast("تم تصدير قائمة الأجهزة بنجاح");
+    }
+
+    async function exportOperationLog() {
+        if (currentUser.role !== "admin") { showToast("غير مصرح لك بالتصدير", true); return; }
+        const snapshot = await firebase.database().ref(LOG_REF).once('value');
+        const logs = [];
+        snapshot.forEach(child => logs.push(child.val()));
+        if (logs.length === 0) { showToast("لا توجد عمليات مسجلة بعد", true); return; }
+        logs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+        const sheetData = logs.map(log => ({
+            "التاريخ والوقت": new Date(log.timestamp).toLocaleString('ar-EG'),
+            "نوع العملية": log.operation === "ADD" ? "إضافة جهاز" : (log.operation === "BORROW" ? "سحب (استعارة)" : (log.operation === "RETURN" ? "إعادة" : "حذف")),
+            "معرف الجهاز": log.deviceId,
+            "نوع الجهاز": log.deviceType === "dish" ? "صحن" : "راوتر",
+            "الموديل": log.deviceSubType,
+            "ملاحظات الجهاز": log.deviceNotes || "",
+            "العميل المستلم": log.relatedPerson || "",
+            "الموظف المنفذ": log.staffName
+        }));
+        const ws = XLSX.utils.json_to_sheet(sheetData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "سجل_العمليات");
+        XLSX.writeFile(wb, `khllo_net_سجل_العمليات_${new Date().toISOString().slice(0,19)}.xlsx`);
+        showToast("تم تصدير سجل العمليات بنجاح");
+    }
+
+    document.getElementById("doLoginBtn").onclick = () => {
+        const u = document.getElementById("loginUsername").value.trim();
+        const p = document.getElementById("loginPassword").value.trim();
+        if (login(u, p)) {
+            showApp();
+        } else {
+            document.getElementById("loginError").innerText = "اسم المستخدم أو كلمة المرور غير صحيحة. تأكد من كتابة الاسم بشكل صحيح (yaser, kamar, mohamad, ghader, reem) وكلمة السر 123456";
+        }
+    };
+    document.getElementById("logoutBtn").onclick = () => { location.reload(); };
+
+    function showToast(msg, err=false) { 
+        let d = document.createElement("div"); 
+        d.innerText = msg; 
+        d.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:"+(err?"#c7533a":"#1a6d8a")+";color:white;padding:8px 20px;border-radius:40px;z-index:9999;"; 
+        document.body.appendChild(d); 
+        setTimeout(() => d.remove(), 2000); 
+    }
+    
+    function escapeHtml(str) { 
+        if(!str) return ''; 
+        return str.replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); 
+    }
+</script>
+</body>
+</html>
