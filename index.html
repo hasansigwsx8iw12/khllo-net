@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>khllo net | إدارة الجرد - سحب وإعادة فقط</title>
+    <title>khllo net | إدارة الجرد</title>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
@@ -50,8 +50,7 @@
         <input type="password" id="loginPassword" placeholder="كلمة المرور">
         <button id="doLoginBtn">دخول</button>
         <div id="loginError" style="color:red; font-size:0.8rem; margin-top:0.5rem;"></div>
-        <div style="margin-top:1rem; font-size:0.7rem; background:#f0f8ff; padding:0.5rem; border-radius:1rem;">
-          </div>
+        <div style="margin-top:1rem; font-size:0.7rem;">جاري تحميل الحسابات من قاعدة البيانات...</div>
     </div>
 </div>
 
@@ -92,16 +91,13 @@
         </div>
     </div>
     <div class="table-wrapper">
-        <table>
-            <thead><tr><th>#</th><th>النوع</th><th>التفاصيل</th><th>الحالة</th><th>العميل المستلم</th><th>أضيف بواسطة</th><th>سُحب بواسطة</th><th>إجراءات</th></tr></thead>
-            <tbody id="inventoryBody"></tbody>
-        </table>
+        <table><thead><tr><th>#</th><th>النوع</th><th>التفاصيل</th><th>الحالة</th><th>العميل المستلم</th><th>أضيف بواسطة</th><th>سُحب بواسطة</th><th>إجراءات</th></tr></thead><tbody id="inventoryBody"></tbody></table>
     </div>
     <footer>Khllo net support ✅</footer>
 </div>
 
 <script>
-    // إعدادات Firebase (خاصة بمشروع khllonet)
+    // Firebase Config
     const firebaseConfig = {
         apiKey: "AIzaSyC9TUQJqKNvMijfODajYz1g2VsnhqCyrUY",
         authDomain: "khllonet.firebaseapp.com",
@@ -118,8 +114,8 @@
         database = firebase.database();
         console.log("✅ Firebase connected");
     } catch(e) { 
-        console.error("Firebase init error", e);
-        alert("⚠️ فشل الاتصال بـ Firebase، تأكد من الإعدادات والإنترنت");
+        console.error(e);
+        alert("⚠️ فشل الاتصال بـ Firebase");
     }
 
     const DISH_TYPES = ["ليتبيم M5", "ليتبيم AC"];
@@ -127,27 +123,39 @@
     let currentUser = { username: "", role: "" };
     const INVENTORY_REF = "khllo_inventory";
     const LOG_REF = "khllo_operation_log";
+    const USERS_REF = "khllo_users";
 
-    // قائمة المستخدمين المسموح لهم (جميع كلمات السر 123456)
-    const validUsers = {
-        "yaser":   { role: "admin", pass: "123456" },
-        "kamar":   { role: "staff", pass: "123456" },
-        "mohamad": { role: "staff", pass: "123456" },
-        "ghader":  { role: "staff", pass: "123456" },
-        "reem":    { role: "staff", pass: "123456" },
-        "hasan":   { role: "admin", pass: "123456" }
-    };
+    // دالة لإضافة الحسابات الأساسية إذا كانت قاعدة البيانات فارغة
+    async function initializeDefaultUsers() {
+        const snapshot = await database.ref(USERS_REF).once('value');
+        if (!snapshot.exists()) {
+            const defaultUsers = {
+                "yaser": { username: "yaser", password: "123456", role: "admin", createdAt: new Date().toISOString() },
+                "kamar": { username: "kamar", password: "123456", role: "staff", createdAt: new Date().toISOString() },
+                "mohamad": { username: "mohamad", password: "123456", role: "staff", createdAt: new Date().toISOString() },
+                "ghader": { username: "ghader", password: "123456", role: "staff", createdAt: new Date().toISOString() },
+                "reem": { username: "reem", password: "123456", role: "staff", createdAt: new Date().toISOString() },
+                "hasan": { username: "hasan", password: "123456", role: "admin", createdAt: new Date().toISOString() }
+            };
+            for (const [key, user] of Object.entries(defaultUsers)) {
+                await database.ref(`${USERS_REF}/${key}`).set(user);
+            }
+            console.log("✅ تم إضافة الحسابات الأساسية إلى قاعدة البيانات");
+        }
+    }
 
-    function login(username, password) {
-        const user = validUsers[username];
-        if (user && user.pass === password) {
+    // التحقق من صحة الدخول من قاعدة البيانات
+    async function login(username, password) {
+        const snapshot = await database.ref(`${USERS_REF}/${username}`).once('value');
+        const user = snapshot.val();
+        if (user && user.password === password) {
             currentUser = { username: username, role: user.role };
             return true;
         }
         return false;
     }
 
-    function showApp() {
+    async function showApp() {
         document.getElementById("loginOverlay").style.display = "none";
         document.getElementById("mainApp").style.display = "block";
         document.getElementById("roleBadge").innerHTML = currentUser.role === "admin" ? `👑 مدير (${currentUser.username})` : `📦 موظف (${currentUser.username})`;
@@ -164,7 +172,7 @@
         if (database) {
             listenToInventory();
         } else {
-            alert("⚠️ الرجاء التأكد من إعدادات Firebase والاتصال بالإنترنت");
+            alert("⚠️ مشكلة في الاتصال بقاعدة البيانات");
         }
         
         document.getElementById("addDeviceBtn").onclick = addDeviceToFirebase;
@@ -175,6 +183,7 @@
         updateSubTypeSelect();
     }
 
+    // باقي الدوال (نفس ما كانت سابقاً مع تعديل بسيط في logOperation لاستخدام database مباشرة)
     function updateSubTypeSelect() {
         const main = document.getElementById("mainDeviceType").value;
         const subSelect = document.getElementById("subTypeSelect");
@@ -195,13 +204,12 @@
             relatedPerson: relatedPerson || "",
             staffName: staffName
         };
-        firebase.database().ref(LOG_REF).push().set(logEntry);
+        database.ref(LOG_REF).push().set(logEntry);
     }
 
     function listenToInventory() {
         if (!database) return;
-        const inventoryRef = firebase.database().ref(INVENTORY_REF);
-        inventoryRef.on('value', (snapshot) => {
+        database.ref(INVENTORY_REF).on('value', (snapshot) => {
             const data = snapshot.val();
             let inventory = [];
             if (data) {
@@ -225,13 +233,13 @@
 
         const tbody = document.getElementById("inventoryBody");
         if (!inventory.length) {
-            tbody.innerHTML = `<table><td colspan="8" style="text-align:center; padding:2rem;">📭 لا توجد أجهزة في الجرد. أضف جهازاً جديداً.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:2rem;">📭 لا توجد أجهزة. أضف جهازاً جديداً.</td></tr>`;
             return;
         }
         let html = "";
         inventory.forEach(dev => {
             const isAvail = dev.status === "available";
-            const details = `${dev.subType} ${dev.notes && dev.notes !== "" ? `(${dev.notes})` : ""}`;
+            const details = `${dev.subType} ${dev.notes ? `(${dev.notes})` : ""}`;
             let actionButtons = "";
             if (!isAvail) {
                 actionButtons += `<button class="btn-outline" data-id="${dev.id}" data-action="return" style="background:#ffe1db;">🔄 إعادة</button>`;
@@ -248,7 +256,7 @@
                         <td>${dev.addedBy ? escapeHtml(dev.addedBy) : "—"}</td>
                         <td>${dev.borrowedByStaff ? escapeHtml(dev.borrowedByStaff) : "—"}</td>
                         <td class="actions-cell">${actionButtons}</td>
-                    </tr>`;
+                     </tr>`;
         });
         tbody.innerHTML = html;
         
@@ -263,7 +271,7 @@
     }
 
     async function handleBorrow(deviceId, clientName) {
-        const ref = firebase.database().ref(`${INVENTORY_REF}/${deviceId}`);
+        const ref = database.ref(`${INVENTORY_REF}/${deviceId}`);
         const snap = await ref.once('value');
         const dev = snap.val();
         if (!dev || dev.status !== "available") { showToast("الجهاز غير متاح", true); return; }
@@ -278,7 +286,7 @@
     }
 
     async function handleReturn(deviceId) {
-        const ref = firebase.database().ref(`${INVENTORY_REF}/${deviceId}`);
+        const ref = database.ref(`${INVENTORY_REF}/${deviceId}`);
         const snap = await ref.once('value');
         const dev = snap.val();
         if (!dev || dev.status !== "borrowed") { showToast("الجهاز ليس مستعاراً", true); return; }
@@ -293,7 +301,7 @@
     }
 
     async function deleteDeviceFromFirebase(deviceId) {
-        const ref = firebase.database().ref(`${INVENTORY_REF}/${deviceId}`);
+        const ref = database.ref(`${INVENTORY_REF}/${deviceId}`);
         const snap = await ref.once('value');
         const dev = snap.val();
         if (dev && dev.status === "borrowed") { showToast("لا يمكن حذف جهاز مستعار", true); return; }
@@ -321,7 +329,7 @@
             addedBy: currentUser.username,
             borrowedByStaff: null
         };
-        await firebase.database().ref(`${INVENTORY_REF}/${newId}`).set(newDevice);
+        await database.ref(`${INVENTORY_REF}/${newId}`).set(newDevice);
         logOperation("ADD", newId, newDevice, "", currentUser.username);
         showToast(`✅ تمت إضافة الجهاز بواسطة ${currentUser.username}`);
         document.getElementById("extraNotes").value = "";
@@ -331,7 +339,7 @@
         const select = document.getElementById("quickBorrowSelect");
         const deviceId = parseInt(select.value);
         const clientName = document.getElementById("quickBorrowName").value.trim();
-        if (!deviceId || !clientName) { showToast("اختر جهازاً واكتب اسم العميل المستلم", true); return; }
+        if (!deviceId || !clientName) { showToast("اختر جهازاً واكتب اسم العميل", true); return; }
         handleBorrow(deviceId, clientName);
         document.getElementById("quickBorrowName").value = "";
         select.value = "";
@@ -349,61 +357,55 @@
     }
 
     async function exportInventoryToExcel() {
-        if (currentUser.role !== "admin") { showToast("غير مصرح لك بالتصدير", true); return; }
-        const snapshot = await firebase.database().ref(INVENTORY_REF).once('value');
+        if (currentUser.role !== "admin") { showToast("غير مصرح", true); return; }
+        const snapshot = await database.ref(INVENTORY_REF).once('value');
         const data = snapshot.val();
         let inventory = [];
         if (data) inventory = Object.keys(data).map(key => ({ id: parseInt(key), ...data[key] }));
-        if (inventory.length === 0) { showToast("لا توجد أجهزة لتصديرها", true); return; }
+        if (inventory.length === 0) { showToast("لا توجد أجهزة", true); return; }
         const sheetData = inventory.map(dev => ({
-            "المعرف": dev.id,
-            "النوع": dev.type === "dish" ? "صحن" : "راوتر",
-            "الموديل": dev.subType,
-            "الملاحظات": dev.notes || "",
-            "الحالة": dev.status === "available" ? "متاح" : "مستعار",
-            "اسم العميل المستلم": dev.borrowerName || "",
-            "أضيف بواسطة (موظف)": dev.addedBy || "",
-            "سُحب بواسطة (موظف)": dev.borrowedByStaff || "",
-            "تاريخ الاستعارة": dev.borrowedAt || ""
+            "المعرف": dev.id, "النوع": dev.type === "dish" ? "صحن" : "راوتر", "الموديل": dev.subType,
+            "الملاحظات": dev.notes || "", "الحالة": dev.status === "available" ? "متاح" : "مستعار",
+            "العميل المستلم": dev.borrowerName || "", "أضيف بواسطة": dev.addedBy || "",
+            "سُحب بواسطة": dev.borrowedByStaff || "", "تاريخ الاستعارة": dev.borrowedAt || ""
         }));
         const ws = XLSX.utils.json_to_sheet(sheetData);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "قائمة_الأجهزة");
+        XLSX.utils.book_append_sheet(wb, ws, "الأجهزة");
         XLSX.writeFile(wb, `khllo_net_الاجهزة_${new Date().toISOString().slice(0,19)}.xlsx`);
-        showToast("تم تصدير قائمة الأجهزة بنجاح");
+        showToast("تم التصدير");
     }
 
     async function exportOperationLog() {
-        if (currentUser.role !== "admin") { showToast("غير مصرح لك بالتصدير", true); return; }
-        const snapshot = await firebase.database().ref(LOG_REF).once('value');
+        if (currentUser.role !== "admin") { showToast("غير مصرح", true); return; }
+        const snapshot = await database.ref(LOG_REF).once('value');
         const logs = [];
         snapshot.forEach(child => logs.push(child.val()));
-        if (logs.length === 0) { showToast("لا توجد عمليات مسجلة بعد", true); return; }
+        if (logs.length === 0) { showToast("لا توجد عمليات", true); return; }
         logs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
         const sheetData = logs.map(log => ({
-            "التاريخ والوقت": new Date(log.timestamp).toLocaleString('ar-EG'),
-            "نوع العملية": log.operation === "ADD" ? "إضافة" : (log.operation === "BORROW" ? "سحب" : (log.operation === "RETURN" ? "إعادة" : "حذف")),
-            "معرف الجهاز": log.deviceId,
-            "نوع الجهاز": log.deviceType === "dish" ? "صحن" : "راوتر",
-            "الموديل": log.deviceSubType,
-            "الملاحظات": log.deviceNotes,
-            "العميل المستلم": log.relatedPerson,
-            "الموظف المنفذ": log.staffName
+            "التاريخ": new Date(log.timestamp).toLocaleString('ar-EG'),
+            "العملية": log.operation === "ADD" ? "إضافة" : (log.operation === "BORROW" ? "سحب" : (log.operation === "RETURN" ? "إعادة" : "حذف")),
+            "معرف الجهاز": log.deviceId, "النوع": log.deviceType === "dish" ? "صحن" : "راوتر",
+            "الموديل": log.deviceSubType, "العميل": log.relatedPerson || "", "الموظف": log.staffName
         }));
         const ws = XLSX.utils.json_to_sheet(sheetData);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "سجل_العمليات");
+        XLSX.utils.book_append_sheet(wb, ws, "سجل العمليات");
         XLSX.writeFile(wb, `khllo_net_سجل_العمليات_${new Date().toISOString().slice(0,19)}.xlsx`);
-        showToast("تم تصدير سجل العمليات بنجاح");
+        showToast("تم التصدير");
     }
 
-    document.getElementById("doLoginBtn").onclick = () => {
+    // زر الدخول
+    document.getElementById("doLoginBtn").onclick = async () => {
         const u = document.getElementById("loginUsername").value.trim();
         const p = document.getElementById("loginPassword").value.trim();
-        if (login(u, p)) {
+        // التأكد من تهيئة الحسابات الأساسية
+        await initializeDefaultUsers();
+        if (await login(u, p)) {
             showApp();
         } else {
-            document.getElementById("loginError").innerText = "اسم المستخدم أو كلمة المرور غير صحيحة. تأكد من كتابة الاسم بشكل صحيح.";
+            document.getElementById("loginError").innerText = "اسم المستخدم أو كلمة المرور غير صحيحة";
         }
     };
     document.getElementById("logoutBtn").onclick = () => { location.reload(); };
