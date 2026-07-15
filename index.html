@@ -40,6 +40,31 @@
         .borrowed { background: #feeadf; color: #bf5e3c; }
         footer { text-align: center; padding: 1rem; font-size: 0.7rem; background: #fafeff; border-top: 1px solid #d9ecf3; }
         @media (max-width: 700px) { .form-row { flex-direction: column; } }
+        .page-panel{
+
+background:#eef9ff;
+
+margin:15px;
+
+padding:15px;
+
+border-radius:18px;
+
+border:1px solid #bfe5f5;
+
+}
+
+.page-title{
+
+font-size:20px;
+
+font-weight:bold;
+
+color:#176887;
+
+margin-bottom:15px;
+
+}
     </style>
 </head>
 <body>
@@ -64,6 +89,22 @@
         </div>
     </div>
     <div class="stats-grid">
+      <div class="page-panel">
+    <div class="form-row">
+
+        <div class="form-group">
+            <label>📂 صفحة الجرد الحالية</label>
+            <select id="inventoryPageSelect"></select>
+        </div>
+
+        <div>
+            <button id="newInventoryPageBtn" class="btn btn-primary">
+                ➕ فتح صفحة جرد جديدة
+            </button>
+        </div>
+
+    </div>
+</div>
         <div class="stat-card"><h4>📡 مجموع الصحون</h4><div class="stat-number" id="totalDishes">0</div></div>
         <div class="stat-card"><h4>📶 مجموع الراوترات</h4><div class="stat-number" id="totalRouters">0</div></div>
         <div class="stat-card"><h4>🔄 مستعارة</h4><div class="stat-number" id="borrowedCount">0</div></div>
@@ -91,8 +132,68 @@
         </div>
     </div>
     <div class="table-wrapper">
-        <table><thead><tr><th>#</th><th>النوع</th><th>التفاصيل</th><th>الحالة</th><th>العميل المستلم</th><th>أضيف بواسطة</th><th>سُحب بواسطة</th><th>إجراءات</th></tr></thead><tbody id="inventoryBody"></tbody></table>
-    </div>
+
+<h2 style="margin-bottom:10px;">
+📡 جدول الصحون
+</h2>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>#</th>
+<th>النوع</th>
+<th>التفاصيل</th>
+<th>الحالة</th>
+<th>العميل</th>
+<th>أضيف بواسطة</th>
+<th>سحب بواسطة</th>
+<th>إجراءات</th>
+
+</tr>
+
+</thead>
+
+<tbody id="dishTableBody">
+
+</tbody>
+
+</table>
+
+<br><br>
+
+<h2 style="margin-bottom:10px;">
+📶 جدول الراوترات
+</h2>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>#</th>
+<th>النوع</th>
+<th>التفاصيل</th>
+<th>الحالة</th>
+<th>العميل</th>
+<th>أضيف بواسطة</th>
+<th>سحب بواسطة</th>
+<th>إجراءات</th>
+
+</tr>
+
+</thead>
+
+<tbody id="routerTableBody">
+
+</tbody>
+
+</table>
+
+</div>
     <footer>Khllo net support ✅</footer>
 </div>
 
@@ -231,12 +332,17 @@
         document.getElementById("borrowedCount").innerText = borrowed;
         document.getElementById("availableCount").innerText = available;
 
-        const tbody = document.getElementById("inventoryBody");
+        const dishBody = document.getElementById("dishTableBody");
+const routerBody = document.getElementById("routerTableBody");
+
+dishBody.innerHTML = "";
+routerBody.innerHTML = "";
         if (!inventory.length) {
             tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:2rem;">📭 لا توجد أجهزة. أضف جهازاً جديداً.</td></tr>`;
             return;
         }
-        let html = "";
+        let dishHtml = "";
+let routerHtml = "";
         inventory.forEach(dev => {
             const isAvail = dev.status === "available";
             const details = `${dev.subType} ${dev.notes ? `(${dev.notes})` : ""}`;
@@ -247,7 +353,7 @@
             if (currentUser.role === "admin") {
                 actionButtons += `<button class="btn-danger" data-id="${dev.id}" data-action="delete" style="margin-right:5px;">🗑️ حذف</button>`;
             }
-            html += `<tr>
+            let row = `<tr>
                         <td>${dev.id}</td>
                         <td>${dev.type === "dish" ? "📡 صحن" : "📶 راوتر"}</td>
                         <td>${escapeHtml(details)}</td>
@@ -256,9 +362,14 @@
                         <td>${dev.addedBy ? escapeHtml(dev.addedBy) : "—"}</td>
                         <td>${dev.borrowedByStaff ? escapeHtml(dev.borrowedByStaff) : "—"}</td>
                         <td class="actions-cell">${actionButtons}</td>
-                     </tr>`;
+   if (dev.type === "dish") {
+    dishHtml += row;
+} else {
+    routerHtml += row;
+}
         });
-        tbody.innerHTML = html;
+        dishBody.innerHTML = dishHtml || `<tr><td colspan="8">📭 لا توجد صحون</td></tr>`;
+routerBody.innerHTML = routerHtml || `<tr><td colspan="8">📭 لا توجد راوترات</td></tr>`;
         
         document.querySelectorAll("[data-action='return']").forEach(btn => {
             btn.onclick = () => { let id = parseInt(btn.dataset.id); handleReturn(id); };
