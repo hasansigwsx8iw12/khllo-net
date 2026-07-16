@@ -222,6 +222,7 @@ margin-bottom:15px;
     const DISH_TYPES = ["ليتبيم M5", "ليتبيم AC"];
     const ROUTER_TYPES = ["Cudy", "Nets Black", "Nets White", "Nets 2 Entel"];
     let currentUser = { username: "", role: "" };
+    let currentInventoryPage = "main";
     const INVENTORY_REF = "khllo_inventory";
     const LOG_REF = "khllo_operation_log";
     const USERS_REF = "khllo_users";
@@ -255,6 +256,48 @@ margin-bottom:15px;
         }
         return false;
     }
+    async function loadInventoryPages(){
+    const select = document.getElementById("inventoryPageSelect");
+
+    const snap = await database.ref("khllo_inventory_pages").once("value");
+
+    select.innerHTML = "";
+
+    if(!snap.exists()){
+
+        await database.ref("khllo_inventory_pages/main").set({
+            name:"الجرد الرئيسي",
+            createdAt:new Date().toISOString()
+        });
+currentInventoryPage = "main";
+    }
+
+    const data = (await database.ref("khllo_inventory_pages").once("value")).val();
+
+    Object.keys(data).forEach(id=>{
+
+        let option = document.createElement("option");
+
+        option.value=id;
+        option.textContent=data[id].name;
+
+        select.appendChild(option);
+
+    });
+
+
+    select.value=currentInventoryPage;
+
+
+    select.onchange=()=>{
+
+        currentInventoryPage=select.value;
+
+        listenToInventory();
+
+    };
+
+}
 
     async function showApp() {
         document.getElementById("loginOverlay").style.display = "none";
@@ -270,12 +313,37 @@ margin-bottom:15px;
             document.getElementById("manageUsersBtn").style.display = "none";
         }
         
-        if (database) {
-            listenToInventory();
-        } else {
-            alert("⚠️ مشكلة في الاتصال بقاعدة البيانات");
-        }
-        
+ if (database) {
+    await loadInventoryPages();
+    listenToInventory();
+} else {
+    alert("⚠️ مشكلة في الاتصال بقاعدة البيانات");
+}
+        document.getElementById("newInventoryPageBtn").onclick = async ()=>{
+
+    let name = prompt("اسم صفحة الجرد:");
+
+    if(!name) return;
+
+
+    let id="page_"+Date.now();
+
+
+    await database.ref("khllo_inventory_pages/"+id).set({
+
+        name:name,
+        createdAt:new Date().toISOString()
+
+    });
+
+
+    currentInventoryPage = id;
+
+await loadInventoryPages();
+
+listenToInventory();
+
+};
         document.getElementById("addDeviceBtn").onclick = addDeviceToFirebase;
         document.getElementById("quickBorrowBtn").onclick = quickBorrow;
         document.getElementById("mainDeviceType").addEventListener("change", updateSubTypeSelect);
@@ -309,18 +377,44 @@ margin-bottom:15px;
     }
 
     function listenToInventory() {
-        if (!database) return;
-        database.ref(INVENTORY_REF).on('value', (snapshot) => {
-            const data = snapshot.val();
-            let inventory = [];
-            if (data) {
-                inventory = Object.keys(data).map(key => ({ id: parseInt(key), ...data[key] }));
-                inventory.sort((a,b) => a.id - b.id);
-            }
-            renderStatsAndTable(inventory);
-            updateQuickDropdown(inventory);
-        });
+
+    let ref;
+
+    if(currentInventoryPage === "main"){
+        ref = database.ref(INVENTORY_REF);
+    } else {
+        ref = database.ref(`${INVENTORY_REF}/${currentInventoryPage}`);
     }
+
+    ref.on('value', (snapshot) => {
+
+        const data = snapshot.val();
+
+        let inventory = [];
+
+        if(data){
+
+            inventory = Object.keys(data)
+            .map(key => {
+
+                return {
+                    id: parseInt(key),
+                    ...data[key]
+                };
+
+            })
+            .filter(x => x.type);
+
+            inventory.sort((a,b)=>a.id-b.id);
+
+        }
+
+        renderStatsAndTable(inventory);
+        updateQuickDropdown(inventory);
+
+    });
+
+}
 
     function renderStatsAndTable(inventory) {
         const dishes = inventory.filter(d => d.type === "dish").length;
@@ -385,7 +479,9 @@ routerBody.innerHTML = routerHtml || `<tr><td colspan="8">📭 لا توجد ر�
     }
 
     async function handleBorrow(deviceId, clientName) {
-        const ref = database.ref(`${INVENTORY_REF}/${deviceId}`);
+        const ref = currentInventoryPage === "main"
+? database.ref(`${INVENTORY_REF}/${deviceId}`)
+: database.ref(`${INVENTORY_REF}/${currentInventoryPage}/${deviceId}`);
         const snap = await ref.once('value');
         const dev = snap.val();
         if (!dev || dev.status !== "available") { showToast("الجهاز غير متاح", true); return; }
@@ -400,7 +496,9 @@ routerBody.innerHTML = routerHtml || `<tr><td colspan="8">📭 لا توجد ر�
     }
 
     async function handleReturn(deviceId) {
-        const ref = database.ref(`${INVENTORY_REF}/${deviceId}`);
+        const ref = currentInventoryPage === "main"
+? database.ref(`${INVENTORY_REF}/${deviceId}`)
+: database.ref(`${INVENTORY_REF}/${currentInventoryPage}/${deviceId}`);
         const snap = await ref.once('value');
         const dev = snap.val();
         if (!dev || dev.status !== "borrowed") { showToast("الجهاز ليس مستعاراً", true); return; }
@@ -415,7 +513,9 @@ routerBody.innerHTML = routerHtml || `<tr><td colspan="8">📭 لا توجد ر�
     }
 
     async function deleteDeviceFromFirebase(deviceId) {
-        const ref = database.ref(`${INVENTORY_REF}/${deviceId}`);
+        const ref = currentInventoryPage === "main"
+? database.ref(`${INVENTORY_REF}/${deviceId}`)
+: database.ref(`${INVENTORY_REF}/${currentInventoryPage}/${deviceId}`);
         const snap = await ref.once('value');
         const dev = snap.val();
         if (dev && dev.status === "borrowed") { showToast("لا يمكن حذف جهاز مستعار", true); return; }
@@ -443,7 +543,15 @@ routerBody.innerHTML = routerHtml || `<tr><td colspan="8">📭 لا توجد ر�
             addedBy: currentUser.username,
             borrowedByStaff: null
         };
-        await database.ref(`${INVENTORY_REF}/${newId}`).set(newDevice);
+        let ref;
+
+if (currentInventoryPage === "main") {
+    ref = database.ref(`${INVENTORY_REF}/${newId}`);
+} else {
+    ref = database.ref(`${INVENTORY_REF}/${currentInventoryPage}/${newId}`);
+}
+
+await ref.set(newDevice);
         logOperation("ADD", newId, newDevice, "", currentUser.username);
         showToast(`✅ تمت إضافة الجهاز بواسطة ${currentUser.username}`);
         document.getElementById("extraNotes").value = "";
@@ -472,10 +580,23 @@ routerBody.innerHTML = routerHtml || `<tr><td colspan="8">📭 لا توجد ر�
 
     async function exportInventoryToExcel() {
         if (currentUser.role !== "admin") { showToast("غير مصرح", true); return; }
-        const snapshot = await database.ref(INVENTORY_REF).once('value');
+        const snapshot = await database.ref(
+ currentInventoryPage==="main"
+ ? INVENTORY_REF
+ : `${INVENTORY_REF}/${currentInventoryPage}`
+).once('value');
         const data = snapshot.val();
         let inventory = [];
-        if (data) inventory = Object.keys(data).map(key => ({ id: parseInt(key), ...data[key] }));
+        if(data){
+
+inventory = Object.keys(data)
+.map(key => ({
+    id: parseInt(key),
+    ...data[key]
+}))
+.filter(x => x.type);
+
+}
         if (inventory.length === 0) { showToast("لا توجد أجهزة", true); return; }
         const sheetData = inventory.map(dev => ({
             "المعرف": dev.id, "النوع": dev.type === "dish" ? "صحن" : "راوتر", "الموديل": dev.subType,
