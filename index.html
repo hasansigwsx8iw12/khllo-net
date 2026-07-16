@@ -324,31 +324,35 @@ currentInventoryPage = "main";
 } else {
     alert("⚠️ مشكلة في الاتصال بقاعدة البيانات");
 }
-        document.getElementById("newInventoryPageBtn").onclick = async ()=>{
+  document.getElementById("newInventoryPageBtn").onclick = async ()=>{
 
     let name = prompt("اسم صفحة الجرد:");
 
     if(!name) return;
 
+    let id = "page_" + Date.now();
 
-    let id="page_"+Date.now();
-
-
-    await database.ref("khllo_inventory_pages/"+id).set({
-
-        name:name,
-        createdAt:new Date().toISOString()
-
+    await database.ref("khllo_inventory_pages/" + id).set({
+        name: name,
+        createdAt: new Date().toISOString()
     });
 
-
+    // تثبيت الصفحة الجديدة
     currentInventoryPage = id;
 
-await loadInventoryPages();
+    // إعادة تحميل القائمة
+    await loadInventoryPages();
 
-document.getElementById("inventoryPageSelect").value = id;
+    // إجبار الاختيار على الصفحة الجديدة
+    const select = document.getElementById("inventoryPageSelect");
+    select.value = id;
 
-listenToInventory();
+    // إزالة أي استماع قديم (مهم)
+    database.ref(INVENTORY_REF).off();
+    database.ref(`${INVENTORY_REF}/${id}`).off();
+
+    // تحميل الجرد الجديد
+    listenToInventory();
 
 };
         document.getElementById("addDeviceBtn").onclick = addDeviceToFirebase;
