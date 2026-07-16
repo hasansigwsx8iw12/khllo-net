@@ -286,7 +286,12 @@ currentInventoryPage = "main";
     });
 
 
-    select.value=currentInventoryPage;
+    if(currentInventoryPage && data[currentInventoryPage]){
+    select.value = currentInventoryPage;
+}else{
+    select.value = "main";
+    currentInventoryPage = "main";
+}
 
 
     select.onchange=()=>{
@@ -340,6 +345,8 @@ currentInventoryPage = "main";
     currentInventoryPage = id;
 
 await loadInventoryPages();
+
+document.getElementById("inventoryPageSelect").value = id;
 
 listenToInventory();
 
